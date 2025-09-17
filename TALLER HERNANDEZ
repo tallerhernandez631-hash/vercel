@@ -1,0 +1,220 @@
+import { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+
+export default function TallerApp() {
+  const [clientes, setClientes] = useState([]);
+  const [busqueda, setBusqueda] = useState("");
+  const [form, setForm] = useState({
+    fecha: "",
+    cliente: "",
+    telefono: "",
+    marca: "",
+    modelo: "",
+    anio: "",
+    motor: "",
+    cilindros: "",
+    km: "",
+    diagnostico: "",
+    estado: "En reparación",
+    costo: ""
+  });
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleAddAuto = () => {
+    if (!form.cliente || !form.marca || !form.modelo) return;
+
+    const clienteExistente = clientes.find(c => c.nombre === form.cliente && c.telefono === form.telefono);
+
+    if (clienteExistente) {
+      const actualizado = clientes.map(c => {
+        if (c.nombre === form.cliente && c.telefono === form.telefono) {
+          return {
+            ...c,
+            autos: [...c.autos, { ...form, id: Date.now() }]
+          };
+        }
+        return c;
+      });
+      setClientes(actualizado);
+    } else {
+      setClientes([...clientes, {
+        nombre: form.cliente,
+        telefono: form.telefono,
+        autos: [{ ...form, id: Date.now() }]
+      }]);
+    }
+
+    setForm({
+      fecha: "",
+      cliente: "",
+      telefono: "",
+      marca: "",
+      modelo: "",
+      anio: "",
+      motor: "",
+      cilindros: "",
+      km: "",
+      diagnostico: "",
+      estado: "En reparación",
+      costo: ""
+    });
+  };
+
+  const clientesFiltrados = clientes.filter(c =>
+    c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+    c.telefono.includes(busqueda) ||
+    c.autos.some(auto =>
+      auto.marca.toLowerCase().includes(busqueda.toLowerCase()) ||
+      auto.modelo.toLowerCase().includes(busqueda.toLowerCase()) ||
+      auto.anio.toString().includes(busqueda)
+    )
+  );
+
+  // Exportar historial a Excel
+  const exportarExcel = () => {
+    let data = [];
+    clientes.forEach(cliente => {
+      cliente.autos.forEach(auto => {
+        data.push({
+          Cliente: cliente.nombre,
+          Telefono: cliente.telefono,
+          Fecha: auto.fecha,
+          Marca: auto.marca,
+          Modelo: auto.modelo,
+          Año: auto.anio,
+          Motor: auto.motor,
+          Cilindros: auto.cilindros,
+          Km: auto.km,
+          Diagnostico: auto.diagnostico,
+          Estado: auto.estado,
+          Costo: auto.costo
+        });
+      });
+    });
+
+    const hoja = XLSX.utils.json_to_sheet(data);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Historial");
+    XLSX.writeFile(libro, "Historial_Taller.xlsx");
+  };
+
+  // Exportar historial a PDF con encabezado personalizado
+  const exportarPDF = () => {
+    const doc = new jsPDF();
+
+    // Logo del taller (ejemplo: base64 o url local)
+    // Aquí puedes reemplazar la ruta por tu logo real
+    const logoUrl = "https://i.ibb.co/2d1L4Qq/logo-taller.png"; 
+
+    const img = new Image();
+    img.src = logoUrl;
+    img.onload = () => {
+      doc.addImage(img, "PNG", 14, 10, 25, 25);
+
+      doc.setFontSize(16);
+      doc.text("Taller Automotriz Hernández", 45, 20);
+      doc.setFontSize(12);
+      doc.text("Historial de Clientes", 45, 28);
+
+      let data = [];
+      clientes.forEach(cliente => {
+        cliente.autos.forEach(auto => {
+          data.push([
+            cliente.nombre,
+            cliente.telefono,
+            auto.fecha,
+            `${auto.marca} ${auto.modelo} ${auto.anio}`,
+            auto.motor,
+            auto.cilindros,
+            auto.km,
+            auto.diagnostico,
+            auto.estado,
+            `$${auto.costo}`
+          ]);
+        });
+      });
+
+      doc.autoTable({
+        head: [["Cliente", "Teléfono", "Fecha", "Auto", "Motor", "Cilindros", "Km", "Diagnóstico", "Estado", "Costo"]],
+        body: data,
+        startY: 40,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [0, 123, 255] }
+      });
+
+      doc.save("Historial_Taller.pdf");
+    };
+  };
+
+  return (
+    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Formulario */}
+      <Card className="p-4">
+        <h2 className="text-xl font-bold mb-2">Registrar Auto</h2>
+        <CardContent className="grid gap-2">
+          <Input placeholder="Fecha" name="fecha" value={form.fecha} onChange={handleChange} />
+          <Input placeholder="Cliente" name="cliente" value={form.cliente} onChange={handleChange} />
+          <Input placeholder="Teléfono" name="telefono" value={form.telefono} onChange={handleChange} />
+          <Input placeholder="Marca" name="marca" value={form.marca} onChange={handleChange} />
+          <Input placeholder="Modelo" name="modelo" value={form.modelo} onChange={handleChange} />
+          <Input placeholder="Año" name="anio" value={form.anio} onChange={handleChange} />
+          <Input placeholder="Motor" name="motor" value={form.motor} onChange={handleChange} />
+          <Input placeholder="Cilindros" name="cilindros" value={form.cilindros} onChange={handleChange} />
+          <Input placeholder="Kilometraje" name="km" value={form.km} onChange={handleChange} />
+          <Textarea placeholder="Diagnóstico / Servicio" name="diagnostico" value={form.diagnostico} onChange={handleChange} />
+          <Input placeholder="Costo estimado" name="costo" value={form.costo} onChange={handleChange} />
+          <Button onClick={handleAddAuto}>Agregar Auto</Button>
+        </CardContent>
+      </Card>
+
+      {/* Historial por cliente con búsqueda */}
+      <div className="grid gap-4 overflow-y-auto">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold">Historial de Clientes</h2>
+          <div className="flex gap-2">
+            <Button onClick={exportarExcel}>Exportar a Excel</Button>
+            <Button onClick={exportarPDF}>Exportar a PDF</Button>
+          </div>
+        </div>
+        <Input
+          placeholder="Buscar por cliente, teléfono o auto..."
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          className="mb-4"
+        />
+
+        {clientesFiltrados.map((cliente, idx) => (
+          <Card key={idx} className="p-4 shadow-md">
+            <CardContent>
+              <p className="font-bold">{cliente.nombre} ({cliente.telefono})</p>
+              <div className="mt-2 space-y-2">
+                {cliente.autos.map((auto) => (
+                  <div key={auto.id} className="border rounded-lg p-2">
+                    <p><strong>Fecha:</strong> {auto.fecha}</p>
+                    <p><strong>Auto:</strong> {auto.marca} {auto.modelo} {auto.anio}</p>
+                    <p><strong>Motor:</strong> {auto.motor}, {auto.cilindros} cil.</p>
+                    <p><strong>Kilometraje:</strong> {auto.km}</p>
+                    <p><strong>Diagnóstico:</strong> {auto.diagnostico}</p>
+                    <p><strong>Estado:</strong> {auto.estado}</p>
+                    <p><strong>Costo:</strong> ${auto.costo}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
